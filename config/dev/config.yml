@@ -1,0 +1,14 @@
+server:
+  host: "0.0.0.0"
+  port: 8000
+logging:
+  level: "info"
+  file: "logs/app.log"
+model:
+  path: "model.onnx"
+filestore:
+  endpoint: 127.0.0.1:9000
+  access_key: minioadmin
+  secret_key: minioadmin
+  bucket: trashscanner-images
+  use_ssl: false

@@ -15,6 +15,13 @@ dependencies = [
     "flake8>=6.0.0",
     "onnx",
     "black>=23.0.0",
+    "uvicorn[standard]",
+    "onnxruntime",
+    "Pillow",
+    "python-dotenv",
+    "PyYAML",
+    "pydantic-settings",
+    "boto3",
 ]
 
 [tool.setuptools.packages.find]
