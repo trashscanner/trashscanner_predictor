@@ -6,12 +6,16 @@ from typing import Optional
 
 import yaml
 from pydantic import BaseModel
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class ServerConfig(BaseModel):
     host: str = "0.0.0.0"
     port: int = 8000
+
+
+class AuthConfig(BaseModel):
+    token: str = "secret-token"
 
 
 class LoggingConfig(BaseModel):
@@ -25,8 +29,6 @@ class ModelConfig(BaseModel):
 
 class FilestoreConfig(BaseModel):
     endpoint: str = "localhost:9000"
-    access_key: str = "minioadmin"
-    secret_key: str = "minioadmin"
     bucket: str = "trashscanner-images"
     use_ssl: bool = False
 
@@ -34,9 +36,12 @@ class FilestoreConfig(BaseModel):
 class Settings(BaseSettings):
     """Application settings."""
 
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
     config_path: str = "config/dev/config.yml"
 
     server: ServerConfig = ServerConfig()
+    auth: AuthConfig = AuthConfig()
     logging: LoggingConfig = LoggingConfig()
     model: ModelConfig = ModelConfig()
     filestore: FilestoreConfig = FilestoreConfig()
@@ -45,10 +50,6 @@ class Settings(BaseSettings):
     def image_size(self) -> tuple[int, int]:
         # Assuming fixed for now, can add to YAML if needed
         return (256, 256)
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
 
 
 def load_settings() -> Settings:

@@ -1,11 +1,20 @@
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, Depends
 from minio.error import S3Error
 
 from ..services.s3_client import S3Client
 from ..services.trash_predictor import TrashPredictor
-from ..models.response import PredictionResponse
+from ..models.response import PredictionResponse, PredictRequest
+from ..config import settings
 
 app = FastAPI(title="Trash Scanner Predictor", description="Backend API for TrashScanner app")
+
+
+async def verify_token(token: str = Header(..., alias="token")) -> str:
+    """Verify authentication token in request headers."""
+    if token != settings.auth.token:
+        raise HTTPException(status_code=403, detail="Invalid authentication token")
+    return token
+
 
 predictor = TrashPredictor()
 s3_client = S3Client()
@@ -18,30 +27,30 @@ async def root() -> dict:
 
 @app.post("/predict", response_model=PredictionResponse, tags=["Prediction"])
 async def predict_trash(
-    photo_id: str,
-    user_id: str = Header(...),
-    prediction_id: str = Header(...),
+    body: PredictRequest,
+    _: str = Depends(verify_token),
 ) -> PredictionResponse:
-    """Predict trash type from uploaded image key."""
+    """Predict trash type from S3 object key."""
     try:
-        # Download file from S3
-        image_bytes = s3_client.download_scan(user_id, photo_id)
+        # Download image from S3
+        image_bytes = s3_client.download_scan(body.scan_url)
     except S3Error as e:
         if e.code == "NoSuchKey":
             raise HTTPException(status_code=404, detail="Image not found")
         else:
             raise HTTPException(status_code=500, detail=f"S3 error {e.code}: {e.message}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to download image: {str(e)}")
 
     try:
-        # Predict
         probabilities = predictor.predict_from_bytes(image_bytes)
         result = max(probabilities, key=lambda k: probabilities[k])
         confidence = probabilities[result]
         return PredictionResponse(
-            prediction_id=prediction_id,
-            target=photo_id,
-            result=(result, confidence),
-            probabilities=probabilities,
+            prediction_id=body.prediction_id,
+            target=body.scan_url,
+            result={result.value: confidence},
+            probabilities={k.value: v for k, v in probabilities.items()},
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
