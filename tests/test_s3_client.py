@@ -17,27 +17,15 @@ def s3_client() -> Generator[S3Client, None, None]:
         yield client
 
 
-def test_get_file_url(s3_client: S3Client) -> None:
-    """Test generating presigned URL."""
-    s3_client.client.presigned_get_object = (
-        MagicMock(return_value="http://example.com")
-    )  # type: ignore[method-assign]
-    url = s3_client.get_file_url("test_key")
-    assert url == "http://example.com"
-    s3_client.client.presigned_get_object.assert_called_once_with(
-        "trashscanner-images", "test_key"
-    )
-
-
 def test_download_scan(s3_client: S3Client) -> None:
     """Test downloading scan as bytes."""
     mock_response = MagicMock()
     mock_response.read.return_value = b"image data"
-    s3_client.client.get_object = (
-        MagicMock(return_value=mock_response)
-    )  # type: ignore[method-assign]
+    s3_client.client.get_object = MagicMock(  # type: ignore[method-assign]
+        return_value=mock_response
+    )
 
-    result = s3_client.download_scan("user123", "photo456")
+    result = s3_client.download_scan("user123/scans/photo456")
     assert result == b"image data"
     s3_client.client.get_object.assert_called_once_with(
         "trashscanner-images", "user123/scans/photo456"

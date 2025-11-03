@@ -21,12 +21,11 @@ def test_load_settings_from_yaml() -> None:
     # Check values from the actual config file
     assert settings.server.host == "0.0.0.0"
     assert settings.server.port == 8000
+    assert settings.auth.token == "secret-token"
     assert settings.logging.level == "info"
     assert settings.logging.file == "logs/app.log"
     assert settings.model.path == "model.onnx"
     assert settings.filestore.endpoint == "127.0.0.1:9000"
-    assert settings.filestore.access_key == "minioadmin"
-    assert settings.filestore.secret_key == "minioadmin"
     assert settings.filestore.bucket == "trashscanner-images"
     assert settings.filestore.use_ssl is False
     assert settings.image_size == (256, 256)  # Default
@@ -43,8 +42,6 @@ def test_load_settings_defaults() -> None:
     assert settings.logging.file is None
     assert settings.model.path == "model.onnx"
     assert settings.filestore.endpoint == "localhost:9000"
-    assert settings.filestore.access_key == "minioadmin"
-    assert settings.filestore.secret_key == "minioadmin"
     assert settings.filestore.bucket == "trashscanner-images"
     assert settings.filestore.use_ssl is False
 
@@ -57,8 +54,6 @@ def test_settings_image_size() -> None:
         model=ModelConfig(path="model.onnx"),
         filestore=FilestoreConfig(
             endpoint="localhost:9000",
-            access_key="key",
-            secret_key="secret",
             bucket="bucket",
             use_ssl=False,
         ),

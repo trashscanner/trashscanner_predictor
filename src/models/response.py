@@ -13,8 +13,13 @@ class TrashType(Enum):
     UNDEFINED = 6
 
 
+class PredictRequest(BaseModel):
+    scan_url: str  # S3 object key (e.g., "user123/scans/photo456")
+    prediction_id: str
+
+
 class PredictionResponse(BaseModel):
     prediction_id: str
     target: str
-    result: tuple[TrashType, float]
-    probabilities: dict[TrashType, float]
+    result: dict[int, float]  # {TrashType value: probability}
+    probabilities: dict[int, float]  # {TrashType value: probability}
