@@ -3,11 +3,11 @@ FROM python:3.13-slim
 WORKDIR /app
 
 
-COPY ./src /app/src
-COPY ./config /app/config
-COPY model.onnx /app/model.onnx
-COPY ./requirements.txt /app/requirements.txt
+COPY ./src ./src
+COPY ./config ./config
+COPY model.onnx ./model.onnx
+COPY ./requirements.txt ./requirements.txt
 
-RUN pip install --no-cache-dir --upgrade -r /app/requirements.txt
+RUN pip install --no-cache-dir --upgrade -r ./requirements.txt
 
 CMD ["python", "-m", "src.main"]
