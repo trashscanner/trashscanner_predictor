@@ -1,5 +1,6 @@
 """Tests for configuration loading."""
 
+import os
 from unittest.mock import patch
 
 from src.config import (
@@ -15,7 +16,7 @@ from src.config import (
 def test_load_settings_from_yaml() -> None:
     """Test loading settings from YAML file."""
     config_path = "config/dev/config.yml"
-    with patch("os.getenv", return_value=config_path):
+    with patch.dict(os.environ, {"CONFIG_PATH": config_path}, clear=True):
         settings = load_settings()
 
     # Check values from the actual config file
@@ -33,7 +34,7 @@ def test_load_settings_from_yaml() -> None:
 
 def test_load_settings_defaults() -> None:
     """Test loading settings with defaults when file not found."""
-    with patch("os.getenv", return_value="nonexistent.yml"):
+    with patch.dict(os.environ, {"CONFIG_PATH": "nonexistent.yml"}, clear=True):
         settings = load_settings()
 
     assert settings.server.host == "0.0.0.0"

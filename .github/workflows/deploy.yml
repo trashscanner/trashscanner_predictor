@@ -1,0 +1,158 @@
+name: Deploy Predictor to Server
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    environment:
+      name: test
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          pull: true
+
+  deploy:
+    name: Deploy to Server
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: test
+
+    steps:
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ vars.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy via SSH
+        run: |
+          ssh -tt -i ~/.ssh/deploy_key ${{ vars.SSH_USER }}@${{ vars.SSH_HOST }} 'bash -s' << 'EOF'
+          set -euo pipefail
+          
+          IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          echo "Image: $IMAGE_TAG"
+          
+          mkdir -p ~/trashscanner_predictor
+          cd ~/trashscanner_predictor
+          
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+          
+          docker stop trashscanner_predictor 2>/dev/null || echo "Container was not running"
+          docker rm -f trashscanner_predictor 2>/dev/null || echo "Container did not exist"
+          
+          docker images | grep trashscanner_predictor | awk '{print $3}' | xargs -r docker rmi -f || true
+          
+          docker pull $IMAGE_TAG
+          if [ $? -ne 0 ]; then
+            echo "✗ Failed to pull image!"
+            exit 1
+          fi
+          
+          docker images | grep trashscanner_predictor
+          
+          cat > .env << 'ENVEOF'
+          CONFIG_PATH=${{ vars.CONFIG_PATH }}
+          AUTH__TOKEN=${{ secrets.AUTH_TOKEN }}
+          ENVEOF
+          
+          mkdir -p config logs
+          
+          docker run -d \
+            --name trashscanner_predictor \
+            --restart unless-stopped \
+            -p 8000:8000 \
+            --env-file .env \
+            $IMAGE_TAG
+
+          rm .env
+          
+          if [ $? -ne 0 ]; then
+            echo "✗ Failed to start container!"
+            docker logs trashscanner_predictor 2>/dev/null || true
+            exit 1
+          fi
+          
+          echo "✓ Container started successfully"
+          exit 0
+          EOF
+
+      - name: Health check
+        run: |
+          ssh -tt -i ~/.ssh/deploy_key ${{ vars.SSH_USER }}@${{ vars.SSH_HOST }} 'bash -s' << 'EOF'
+          set -euo pipefail
+          
+          echo "=== Health check (30 attempts, 60 seconds total) ==="
+          for i in $(seq 1 30); do
+            if curl -f http://localhost:8000/ > /dev/null 2>&1; then
+              HEALTH_STATUS=$(curl -s http://localhost:8000/)
+              echo "Health check response: $HEALTH_STATUS"
+              if echo "$HEALTH_STATUS" | grep -q "Welcome to Trash Scanner Predictor API"; then
+                echo ""
+                echo "✓ Deployment successful! Predictor is healthy."
+                exit 0
+              else
+                echo "✗ Unexpected response from predictor"
+                echo ""
+                echo "Container logs:"
+                docker logs --tail 100 trashscanner_predictor
+                exit 1
+              fi
+            fi
+            echo "Attempt $i/30: Health check failed, retrying in 2 seconds..."
+            sleep 2
+          done
+          
+          echo ""
+          echo "✗ Health check failed after 30 attempts (60 seconds)"
+          echo ""
+          echo "Final container logs:"
+          docker logs --tail 100 trashscanner_predictor
+          exit 1
+          EOF

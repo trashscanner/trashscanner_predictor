@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, Header, Depends
-from minio.error import S3Error
+import httpx
 
 from ..services.s3_client import S3Client
 from ..services.trash_predictor import TrashPredictor
@@ -34,11 +34,17 @@ async def predict_trash(
     try:
         # Download image from S3
         image_bytes = s3_client.download_scan(body.scan_url)
-    except S3Error as e:
-        if e.code == "NoSuchKey":
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
             raise HTTPException(status_code=404, detail="Image not found")
         else:
-            raise HTTPException(status_code=500, detail=f"S3 error {e.code}: {e.message}")
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"Failed to download image: "
+                    f"{e.response.status_code} {e.response.reason_phrase}"
+                ),
+            )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to download image: {str(e)}")
 

@@ -1,21 +1,22 @@
 """MinIO client for file storage."""
 
-from minio import Minio
+import httpx
 
 from ..config import settings
 
 
 class S3Client:
-    """Client for uploading files to MinIO-compatible storage."""
+    """Client for downloading files from MinIO-compatible storage."""
 
     def __init__(self) -> None:
-        """Initialize MinIO client with settings."""
-        self.client = Minio(
-            endpoint=settings.filestore.endpoint,
-            secure=settings.filestore.use_ssl,
-        )
+        """Initialize client with settings."""
         self.bucket = settings.filestore.bucket
+        protocol = "https" if settings.filestore.use_ssl else "http"
+        self.base_url = f"{protocol}://{settings.filestore.endpoint}/{self.bucket}"
 
     def download_scan(self, key: str) -> bytes:
-        """Download scan file from MinIO and return as bytes."""
-        return self.client.get_object(self.bucket, key).read()
+        """Download scan file from MinIO via public URL and return as bytes."""
+        url = f"{self.base_url}/{key}"
+        response = httpx.get(url, timeout=30.0)
+        response.raise_for_status()
+        return response.content
