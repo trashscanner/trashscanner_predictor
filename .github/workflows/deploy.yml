@@ -99,7 +99,7 @@ jobs:
           
           cat > .env << 'ENVEOF'
           CONFIG_PATH=${{ vars.CONFIG_PATH }}
-          AUTH_TOKEN=${{ secrets.AUTH_TOKEN }}
+          AUTH__TOKEN=${{ secrets.AUTH_TOKEN }}
           ENVEOF
           
           mkdir -p config logs
